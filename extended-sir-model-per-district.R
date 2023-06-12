@@ -14,12 +14,20 @@ library(deSolve)
 
 # Input data
 input_data <- tibble(
+  # Transmissibility 
   T = 0.02,
+  # Duration of Infectiousness
   DI = 10,
+  # % Needing Hospitalization
   PNH = 0.138,
+  # % Needing ICU Care
   PNIC = 0.047,
+  # Mortality rate
   MR = 0.0326,
-  vaccination_rate = 0.00102
+  # Contact rate
+  CR = 5,
+  # Vaccination rate
+  VR = 0.00102
 )
 
 # Initial state
@@ -28,33 +36,52 @@ initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
 # Load the observed data
 observed_data <- read.csv("observed_data_per_district.csv")
 
-# Make sure that time is an integer
-observed_data$time <- as.integer(observed_data$time)
+# Define a function for CR that varies with time
+cr_function <- function(time) {
+  base_CR <- input_data$CR
+  
+  # Calculate the number of 20-day periods that have passed, minus one
+  periods_passed <- (time - 300) %/% 100
+  # Calculate the number of 20-day periods that have passed since the 100th time step
+  # periods_passed <- max(0, (time - 101) %/% 30)
+  
+  
+  # Calculate the increase in the contact rate
+  CR_increase <- periods_passed * 3.0
+  
+  # Add the increase to the base contact rate
+  new_CR <- base_CR + CR_increase
+  
+  return(new_CR)
+}
+
 
 # Define the SIR model
 sir_model <- function(time, state, parameters) {
   with(as.list(c(state, parameters)), {
-    # Find the index of the closest time step in observed_data
-    closest_time_index <- which.min(abs(observed_data$time - time))
-    
-    # Use this index to select the corresponding CR value
-    CR <- observed_data$contact_rate[closest_time_index]
-    
+    CR <- cr_function(time)  # use the time-dependent function here
     N <- S + I + R + V
     ECR <- T * CR
     RR <- 1 / DI
-    dS <- -ECR * S * I / N - vaccination_rate * S
+    
+    # Check if the current time is after the 410th time step
+    if(time >= 410) {
+      dS <- -ECR * S * I / N - VR * S
+      dV <- VR * S
+    } else {
+      # Before 410 time step, no vaccinations are done
+      dS <- -ECR * S * I / N
+      dV <- 0
+    }
+    
     dI <- ECR * S * I / N - RR * I
     dR <- RR * I
-    dV <- vaccination_rate * S
     return(list(c(dS, dI, dR, dV)))
   })
 }
 
-
-
 # Time steps
-time_steps <- seq_len(365)
+time_steps <- seq_len(900)
 
 # Solve the differential equations
 time_series <- ode(y = initial_state, times = time_steps, func = sir_model, parms = input_data)
