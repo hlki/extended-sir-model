@@ -25,7 +25,7 @@ input_data <- tibble(
   # Mortality rate
   MR = 0.0326,
   # Contact rate
-  CR = 5,
+  CR = 7.4,
   # Vaccination rate
   VR = 0.00102
 )
@@ -41,10 +41,9 @@ cr_function <- function(time) {
   base_CR <- input_data$CR
   
   # Calculate the number of 20-day periods that have passed, minus one
-  periods_passed <- (time - 250) %/% 100
+  #periods_passed <- (time - 1) %/% 20
   # Calculate the number of 20-day periods that have passed since the 100th time step
-  # periods_passed <- max(0, (time - 101) %/% 30)
-  
+  periods_passed <- max(0, (time - 301) %/% 100)
   
   # Calculate the increase in the contact rate
   CR_increase <- periods_passed * 3.0
