@@ -41,7 +41,7 @@ cr_function <- function(time) {
   base_CR <- input_data$CR
   
   # Calculate the number of 20-day periods that have passed, minus one
-  periods_passed <- (time - 300) %/% 100
+  periods_passed <- (time - 250) %/% 100
   # Calculate the number of 20-day periods that have passed since the 100th time step
   # periods_passed <- max(0, (time - 101) %/% 30)
   
