@@ -20,8 +20,11 @@ ui <- fluidPage(
     ),
     mainPanel(
       plotOutput("sirPlot"),
-      plotOutput("comparisonPlot"),
-      plotOutput("healthcareImpactPlot")
+      plotOutput("healthcareImpactPlot"),
+      plotOutput("infectedComparisonPlot"),
+      plotOutput("vaccinatedComparisonPlot"),
+      plotOutput("recoveredComparisonPlot"),
+      plotOutput("deathComparisonPlot")
     )
   )
 )
@@ -46,7 +49,7 @@ server <- function(input, output, session) {
   sir_model <- reactive({
     function(time, state, parameters) {
       with(as.list(c(state, parameters)), {
-        CR <- cr_function()(time)  # use the time-dependent function here
+        CR <- cr_function()(time)  # time-dependent function
         N <- S + I + R + V
         ECR <- T * CR
         RR <- 1 / DI
@@ -110,9 +113,9 @@ server <- function(input, output, session) {
       theme_minimal()
   })
   
-  # Output for comparison plot
-  output$comparisonPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+  # Output for infected comparison plot
+  output$infectedComparisonPlot <- renderPlot({
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
@@ -127,7 +130,103 @@ server <- function(input, output, session) {
     points(observed_data$time, observed_data$total_infected, pch = 19, col = "red")
     legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Comparison of Model Predictions and Observed Data")  # add title here
+    title("Infected Comparison of Model Predictions and Observed Data")
+  })
+  
+  # Output for vaccinated comparison plot
+  output$vaccinatedComparisonPlot <- renderPlot({
+    
+    # Handle NA values
+    observed_data <- observed_data[!is.na(observed_data$fully_vaccinated), ]
+    
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
+    time_steps <- seq_len(input$time_steps)
+    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
+    
+    time_series_df <- as.data.frame(time_series)
+    time_series_df$NH <- time_series_df$I * input_data$PNH
+    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$D <- time_series_df$I * input_data$MR
+    
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$V, observed_data$fully_vaccinated)), xlab = "Time", ylab = "Vaccinated")
+    lines(time_series_df$time, time_series_df$V, lwd = 2)
+    points(observed_data$time, observed_data$fully_vaccinated, pch = 19, col = "red")
+    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    
+    title("Vaccinated Comparison of Model Predictions and Observed Data")
+  })
+  
+  # Output for recovered comparison plot
+  output$recoveredComparisonPlot <- renderPlot({
+    
+    # Handle NA values
+    observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
+    
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
+    time_steps <- seq_len(input$time_steps)
+    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
+    
+    time_series_df <- as.data.frame(time_series)
+    time_series_df$NH <- time_series_df$I * input_data$PNH
+    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$D <- time_series_df$I * input_data$MR
+    
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
+    lines(time_series_df$time, time_series_df$R, lwd = 2)
+    points(observed_data$time, observed_data$total_recovered, pch = 19, col = "red")
+    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    
+    title("Recovered Comparison of Model Predictions and Observed Data")
+  })
+  
+  # Output for recovered comparison plot
+  output$recoveredComparisonPlot <- renderPlot({
+    
+    # Handle NA values
+    observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
+    
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
+    time_steps <- seq_len(input$time_steps)
+    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
+    
+    time_series_df <- as.data.frame(time_series)
+    time_series_df$NH <- time_series_df$I * input_data$PNH
+    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$D <- time_series_df$I * input_data$MR
+    
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
+    lines(time_series_df$time, time_series_df$R, lwd = 2)
+    points(observed_data$time, observed_data$total_recovered, pch = 19, col = "red")
+    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    
+    title("Recovered Comparison of Model Predictions and Observed Data")
+  })
+  
+  # Output for death comparison plot
+  output$deathComparisonPlot <- renderPlot({
+    
+    # Handle NA values
+    observed_data <- observed_data[!is.na(observed_data$total_death), ]
+    
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
+    time_steps <- seq_len(input$time_steps)
+    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
+    
+    time_series_df <- as.data.frame(time_series)
+    time_series_df$NH <- time_series_df$I * input_data$PNH
+    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$D <- time_series_df$I * input_data$MR
+    
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$D, observed_data$total_death)), xlab = "Time", ylab = "Vaccinated")
+    lines(time_series_df$time, time_series_df$D, lwd = 2)
+    points(observed_data$time, observed_data$total_death, pch = 19, col = "red")
+    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    
+    title("Recovered Comparison of Model Predictions and Observed Data")
   })
 }
 
