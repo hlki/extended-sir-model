@@ -11,11 +11,12 @@ ui <- fluidPage(
       numericInput("PNH", "% Needing Hospitalization", value = 0.138, min = 0, max = 1, step = 0.01),
       numericInput("PNIC", "% Needing ICU Care", value = 0.047, min = 0, max = 1, step = 0.01),
       numericInput("MR", "Mortality rate", value = 0.0326, min = 0, max = 1, step = 0.01),
-      numericInput("CR", "Contact rate", value = 5.0, min = 0, max = 100, step = 0.1),
+      numericInput("CR", "Contact rate", value = 6.7, min = 0, max = 100, step = 0.1),
       numericInput("VR", "Vaccination rate", value = 0.00102, min = 0, max = 1, step = 0.0001),
-      sliderInput("starting_time", "Starting time for CR increase", value = 550, min = 0, max = 900, step = 5),
-      sliderInput("time_interval", "Time interval for CR increase", value = 25, min = 0, max = 900, step = 5),
-      sliderInput("CR_increase", "Contact rate increase per time interval", value = 2.2, min = 0, max = 10, step = 0.1)
+      sliderInput("time_steps", "Time steps", value = 900, min = 10, max = 1095, step = 5),
+      sliderInput("starting_time", "Starting time for CR increase", value = 165, min = 0, max = 900, step = 5),
+      sliderInput("time_interval", "Time interval for CR increase", value = 120, min = 0, max = 900, step = 5),
+      sliderInput("CR_increase", "Contact rate increase per time interval", value = 0.5, min = 0, max = 10, step = 0.1)
     ),
     mainPanel(
       plotOutput("sirPlot"),
@@ -26,7 +27,11 @@ ui <- fluidPage(
 )
 
 # Server logic
-server <- function(input, output) {
+server <- function(input, output, session) {
+  observe({
+    updateSliderInput(session, "starting_time", max = input$time_steps)
+    updateSliderInput(session, "time_interval", max = input$time_steps)
+  })
   
   cr_function <- reactive({
     function(time) {
@@ -65,7 +70,7 @@ server <- function(input, output) {
   output$sirPlot <- renderPlot({
     input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
-    time_steps <- seq_len(900)
+    time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
@@ -82,29 +87,11 @@ server <- function(input, output) {
       theme_minimal()
   })
   
-  # Output for comparison plot
-  output$comparisonPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
-    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
-    time_steps <- seq_len(900)
-    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
-    
-    time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
-    time_series_df$D <- time_series_df$I * input_data$MR
-    
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$I, observed_data$total_infected)), xlab = "Time", ylab = "Infected")
-    lines(time_series_df$time, time_series_df$I, lwd = 2)
-    points(observed_data$time, observed_data$total_infected, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
-  })
-  
   # Output for healthcare impact plot
   output$healthcareImpactPlot <- renderPlot({
     input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
-    time_steps <- seq_len(900)
+    time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
@@ -121,6 +108,26 @@ server <- function(input, output) {
       scale_color_manual(values = c("NH" = "green", "NIC" = "blue", "D" = "red")) +
       labs(x = "Time", y = "Count", colour = "Compartment", title = "Impact on healthcare system and mortality") +
       theme_minimal()
+  })
+  
+  # Output for comparison plot
+  output$comparisonPlot <- renderPlot({
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
+    time_steps <- seq_len(input$time_steps)
+    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
+    
+    time_series_df <- as.data.frame(time_series)
+    time_series_df$NH <- time_series_df$I * input_data$PNH
+    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$D <- time_series_df$I * input_data$MR
+    
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$I, observed_data$total_infected)), xlab = "Time", ylab = "Infected")
+    lines(time_series_df$time, time_series_df$I, lwd = 2)
+    points(observed_data$time, observed_data$total_infected, pch = 19, col = "red")
+    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    
+    title("Comparison of Model Predictions and Observed Data")  # add title here
   })
 }
 
