@@ -226,7 +226,7 @@ server <- function(input, output, session) {
     points(observed_data$time, observed_data$total_death, pch = 19, col = "red")
     legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Recovered Comparison of Model Predictions and Observed Data")
+    title("Death Rate Comparison of Model Predictions and Observed Data")
   })
 }
 
