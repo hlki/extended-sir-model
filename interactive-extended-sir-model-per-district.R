@@ -1,5 +1,17 @@
-# Additional libraries
-library(shiny)
+# Function to check, install and load packages
+load_package <- function(package_name) {
+  if (!require(package_name, character.only = TRUE)) {
+    install.packages(package_name, dependencies = TRUE)
+    library(package_name, character.only = TRUE)
+  }
+}
+
+# List of necessary packages
+packages <- c("deSolve", "ggplot2", "reshape2", "tidyverse", "shiny")
+
+# Apply the function to each package
+lapply(packages, load_package)
+
 
 # UI
 ui <- fluidPage(
@@ -28,6 +40,9 @@ ui <- fluidPage(
     )
   )
 )
+
+# Load the observed data
+observed_data <- read.csv("observed_data_per_district.csv")
 
 # Server logic
 server <- function(input, output, session) {
