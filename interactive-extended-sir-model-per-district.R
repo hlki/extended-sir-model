@@ -22,7 +22,7 @@ ui <- fluidPage(
       numericInput("DI", "Duration of Infectiousness", value = 10, min = 1, max = 100, step = 1),
       numericInput("PNH", "% Needing Hospitalization", value = 0.138, min = 0, max = 1, step = 0.01),
       numericInput("PNIC", "% Needing ICU Care", value = 0.047, min = 0, max = 1, step = 0.01),
-      numericInput("MR", "Mortality rate", value = 0.0326, min = 0, max = 1, step = 0.01),
+      numericInput("MR", "Mortality rate", value = 0.026, min = 0, max = 1, step = 0.01),
       numericInput("CR", "Contact rate", value = 6.7, min = 0, max = 100, step = 0.1),
       numericInput("VR", "Vaccination rate", value = 0.00102, min = 0, max = 1, step = 0.0001),
       sliderInput("time_steps", "Time steps", value = 900, min = 10, max = 1095, step = 5),
