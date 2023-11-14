@@ -21,7 +21,7 @@ ui <- fluidPage(
       numericInput("T", "Transmissibility", value = 0.02, min = 0, max = 1, step = 0.01),
       numericInput("DI", "Duration of Infectiousness", value = 10, min = 1, max = 100, step = 1),
       numericInput("PNH", "% Needing Hospitalization", value = 0.112, min = 0, max = 1, step = 0.01),
-      numericInput("PNIC", "% Needing ICU Care", value = 0.047, min = 0, max = 1, step = 0.01),
+      numericInput("PNICU", "% Needing ICU Care", value = 0.047, min = 0, max = 1, step = 0.01),
       numericInput("MR", "Mortality rate", value = 0.026, min = 0, max = 1, step = 0.01),
       numericInput("CR", "Contact rate", value = 6.7, min = 0, max = 100, step = 0.1),
       numericInput("VR", "Vaccination rate", value = 0.00102, min = 0, max = 1, step = 0.0001),
@@ -86,14 +86,14 @@ server <- function(input, output, session) {
   
   # Output for SIR plot
   output$sirPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     ggplot(time_series_df, aes(x = time)) +
@@ -107,14 +107,14 @@ server <- function(input, output, session) {
   
   # Output for healthcare impact plot
   output$healthcareImpactPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     time_series_melt <- melt(time_series_df, id = "time")
@@ -130,14 +130,14 @@ server <- function(input, output, session) {
   
   # Output for infected comparison plot
   output$infectedComparisonPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$I, observed_data$total_infected)), xlab = "Time", ylab = "Infected")
@@ -154,14 +154,14 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$fully_vaccinated), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$V, observed_data$fully_vaccinated)), xlab = "Time", ylab = "Vaccinated")
@@ -178,14 +178,14 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
@@ -202,14 +202,14 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
@@ -226,14 +226,14 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$total_death), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNIC = input$PNIC, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
     time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNIC
+    time_series_df$NIC <- time_series_df$I * input_data$PNICU
     time_series_df$D <- time_series_df$I * input_data$MR
     
     plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$D, observed_data$total_death)), xlab = "Time", ylab = "Vaccinated")
