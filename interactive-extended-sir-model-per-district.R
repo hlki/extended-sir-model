@@ -15,20 +15,24 @@ lapply(packages, load_package)
 
 # UI
 ui <- fluidPage(
-  titlePanel("Interactive SIR model"),
+  titlePanel("Інтерактивна SIRV модель"),
   sidebarLayout(
     sidebarPanel(
-      numericInput("T", "Transmissibility", value = 0.02, min = 0, max = 1, step = 0.01),
-      numericInput("DI", "Duration of Infectiousness", value = 10, min = 1, max = 100, step = 1),
-      numericInput("PNH", "% Needing Hospitalization", value = 0.112, min = 0, max = 1, step = 0.01),
-      numericInput("PNICU", "% Needing ICU Care", value = 0.047, min = 0, max = 1, step = 0.01),
-      numericInput("MR", "Mortality rate", value = 0.026, min = 0, max = 1, step = 0.01),
-      numericInput("CR", "Contact rate", value = 6.7, min = 0, max = 100, step = 0.1),
-      numericInput("VR", "Vaccination rate", value = 0.00102, min = 0, max = 1, step = 0.0001),
-      sliderInput("time_steps", "Time steps", value = 900, min = 10, max = 1095, step = 5),
-      sliderInput("starting_time", "Starting time for CR increase", value = 165, min = 0, max = 900, step = 5),
-      sliderInput("time_interval", "Time interval for CR increase", value = 120, min = 0, max = 900, step = 5),
-      sliderInput("CR_increase", "Contact rate increase per time interval", value = 0.5, min = 0, max = 10, step = 0.1)
+      numericInput("a", "Імовірність зараження", value = 0.02, min = 0, max = 1, step = 0.01),
+      numericInput("d", "Тривалість інфекційності", value = 10, min = 1, max = 100, step = 1),
+      numericInput("pNH", "Особи які потребують госпіталізації (у %)", value = 0.112, min = 0, max = 1, step = 0.01),
+      numericInput("pNICU", "Особи які потребують реанімаційної допомоги (у %)", value = 0.047, min = 0, max = 1, step = 0.01),
+      numericInput("m", "Коефіцієнт смертності (на 1 мільйон)", value = 0.026, min = 0, max = 1, step = 0.01),
+      numericInput("c", "Середня кількість контактів", value = 6.7, min = 0, max = 100, step = 0.1),
+      numericInput("nu", "Рівень вакцинації", value = 0.00102, min = 0, max = 1, step = 0.0001),
+      sliderInput("time_steps", "Час", value = 900, min = 10, max = 1095, step = 5),
+      checkboxInput("use_dynamic_c", "Використовувати динамічне збільшення контактів", value = FALSE),
+      conditionalPanel(
+        condition = "input.use_dynamic_c == true",
+        sliderInput("starting_time", "Момент часу для збільшення кількості контактів", value = 165, min = 0, max = 900, step = 5),
+        sliderInput("time_interval", "Часовий інтервал для збільшення кількості контактів", value = 120, min = 0, max = 900, step = 5),
+        sliderInput("c_increase", "Зростання частоти контактів за інтервал часу", value = 2, min = 0, max = 10, step = 0.1)
+      ),
     ),
     mainPanel(
       plotOutput("sirPlot"),
@@ -53,100 +57,108 @@ server <- function(input, output, session) {
   
   cr_function <- reactive({
     function(time) {
-      base_CR <- input$CR
+      base_c <- input$c
       periods_passed <- max(0, (time - input$starting_time) %/% input$time_interval)
-      CR_increase <- periods_passed * input$CR_increase
-      new_CR <- base_CR + CR_increase
-      return(new_CR)
+      c_increase <- periods_passed * input$c_increase
+      new_c <- base_c + c_increase
+      return(new_c)
     }
   })
   
   sir_model <- reactive({
     function(time, state, parameters) {
       with(as.list(c(state, parameters)), {
-        CR <- cr_function()(time)  # time-dependent function
+        c <- if(input$use_dynamic_c) cr_function()(time) else input$c
         N <- S + I + R + V
-        ECR <- T * CR
-        RR <- 1 / DI
+        beta <- a * c
+        gamma <- 1 / d
         
         if(time >= 410) {
-          dS <- -ECR * S * I / N - VR * S
-          dV <- VR * S
+          dS <- -beta * S * I / N - nu * S
+          dV <- nu * S
         } else {
-          dS <- -ECR * S * I / N
+          dS <- -beta * S * I / N
           dV <- 0
         }
         
-        dI <- ECR * S * I / N - RR * I
-        dR <- RR * I
-        return(list(c(dS, dI, dR, dV)))
+        d <- beta * S * I / N - gamma * I
+        dR <- gamma * I
+        return(list(c(dS, d, dR, dV)))
       })
     }
   })
   
   # Output for SIR plot
   output$sirPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
     ggplot(time_series_df, aes(x = time)) +
-      geom_line(aes(y = S, colour = "S")) +
-      geom_line(aes(y = I, colour = "I")) +
-      geom_line(aes(y = R, colour = "R")) +
-      geom_line(aes(y = V, colour = "V")) +
-      labs(x = "Time", y = "Count", colour = "Compartment", title = "Susceptible-Infected-Recovered-Vaccinated Model") +
-      theme_minimal()
+      geom_line(aes(y = S, colour = "S"), size = 1.5) + 
+      geom_line(aes(y = I, colour = "I"), size = 1.5) +
+      geom_line(aes(y = R, colour = "R"), size = 1.5) +
+      geom_line(aes(y = V, colour = "V"), size = 1.5) +
+      labs(x = "Час", y = "Кількість", colour = "", title = "Результати SIRV моделі") +
+      theme_minimal() +
+      theme(text = element_text(size = 14, face = "bold"),
+            axis.title = element_text(size = 14, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold"))
   })
   
   # Output for healthcare impact plot
   output$healthcareImpactPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR) # converted to list
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu) # converted to list
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
     time_series_melt <- melt(time_series_df, id = "time")
     
-    subset <- time_series_melt %>% filter(variable %in% c("NH", "NIC", "D"))
+    subset <- time_series_melt %>% filter(variable %in% c("NH", "NICU", "D"))
     
     ggplot(subset, aes(x = time, y = value, colour = variable)) +
-      geom_line() +
-      scale_color_manual(values = c("NH" = "green", "NIC" = "blue", "D" = "red")) +
-      labs(x = "Time", y = "Count", colour = "Compartment", title = "Impact on healthcare system and mortality") +
-      theme_minimal()
+      geom_line(size = 1.5) +  
+      scale_color_manual(values = c("NH" = "green", "NICU" = "blue", "D" = "red")) +
+      labs(x = "Час", y = "Кількість", colour = "", title = "Кількість хворих що потребують медичної допомоги та померлих від хвороби") +
+      theme_minimal() +
+      theme(text = element_text(size = 14, face = "bold"),  
+            axis.title = element_text(size = 14, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold"))
   })
   
   # Output for infected comparison plot
   output$infectedComparisonPlot <- renderPlot({
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$I, observed_data$total_infected)), xlab = "Time", ylab = "Infected")
+    par(cex.lab = 1.5, font.lab = 1)  
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$I, observed_data$total_infected)), xlab = "Час", ylab = "Інфіковані")
     lines(time_series_df$time, time_series_df$I, lwd = 2)
     points(observed_data$time, observed_data$total_infected, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    legend("topleft", legend = c("Прогноз моделі", "Дані спостережень"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Infected Comparison of Model Predictions and Observed Data")
+    title("Порівняння прогнозованої кількості інфікованих з спостереженнями")
   })
+  
   
   # Output for vaccinated comparison plot
   output$vaccinatedComparisonPlot <- renderPlot({
@@ -154,22 +166,23 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$fully_vaccinated), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$V, observed_data$fully_vaccinated)), xlab = "Time", ylab = "Vaccinated")
+    par(cex.lab = 1.5, font.lab = 1)
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$V, observed_data$fully_vaccinated)), xlab = "Час", ylab = "Вакциновані")
     lines(time_series_df$time, time_series_df$V, lwd = 2)
     points(observed_data$time, observed_data$fully_vaccinated, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    legend("topleft", legend = c("Прогноз моделі", "Дані спостережень"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Vaccinated Comparison of Model Predictions and Observed Data")
+    title("Порівняння прогнозованої кількості вакцинованих з спостереженнями")
   })
   
   # Output for recovered comparison plot
@@ -178,46 +191,23 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
+    par(cex.lab = 1.5, font.lab = 1)
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Час", ylab = "Одужавші")
     lines(time_series_df$time, time_series_df$R, lwd = 2)
     points(observed_data$time, observed_data$total_recovered, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    legend("topleft", legend = c("Прогноз моделі", "Дані спостережень"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Recovered Comparison of Model Predictions and Observed Data")
-  })
-  
-  # Output for recovered comparison plot
-  output$recoveredComparisonPlot <- renderPlot({
-    
-    # Handle NA values
-    observed_data <- observed_data[!is.na(observed_data$total_recovered), ]
-    
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
-    initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
-    time_steps <- seq_len(input$time_steps)
-    time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
-    
-    time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
-    
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$R, observed_data$total_recovered)), xlab = "Time", ylab = "Vaccinated")
-    lines(time_series_df$time, time_series_df$R, lwd = 2)
-    points(observed_data$time, observed_data$total_recovered, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
-    
-    title("Recovered Comparison of Model Predictions and Observed Data")
+    title("Порівняння прогнозованої кількості одужавших з спостереженнями")
   })
   
   # Output for death comparison plot
@@ -226,22 +216,23 @@ server <- function(input, output, session) {
     # Handle NA values
     observed_data <- observed_data[!is.na(observed_data$total_death), ]
     
-    input_data <- list(T = input$T, DI = input$DI, PNH = input$PNH, PNICU = input$PNICU, MR = input$MR, CR = input$CR, VR = input$VR)
+    input_data <- list(a = input$a, d = input$d, pNH = input$pNH, pNICU = input$pNICU, m = input$m, c = input$c, nu = input$nu)
     initial_state <- c(S = 1152400, I = 11, R = 1, V = 0)
     time_steps <- seq_len(input$time_steps)
     time_series <- ode(y = initial_state, times = time_steps, func = sir_model(), parms = input_data)
     
     time_series_df <- as.data.frame(time_series)
-    time_series_df$NH <- time_series_df$I * input_data$PNH
-    time_series_df$NIC <- time_series_df$I * input_data$PNICU
-    time_series_df$D <- time_series_df$I * input_data$MR
+    time_series_df$NH <- time_series_df$I * input_data$pNH
+    time_series_df$NICU <- time_series_df$I * input_data$pNICU
+    time_series_df$D <- time_series_df$I * input_data$m
     
-    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$D, observed_data$total_death)), xlab = "Time", ylab = "Vaccinated")
+    par(cex.lab = 1.5, font.lab = 1) 
+    plot(NA, xlim = range(time_steps), ylim = range(c(time_series_df$D, observed_data$total_death)), xlab = "Час", ylab = "Померлі")
     lines(time_series_df$time, time_series_df$D, lwd = 2)
     points(observed_data$time, observed_data$total_death, pch = 19, col = "red")
-    legend("topleft", legend = c("Model predictions", "Observed data"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
+    legend("topleft", legend = c("Прогноз моделі", "Дані спостережень"), lty = c(1, NA), pch = c(NA, 19), col = c("black", "red"))
     
-    title("Death Rate Comparison of Model Predictions and Observed Data")
+    title("Порівняння прогнозованої кількості померлих від хвороби з спостереженнями")
   })
 }
 
